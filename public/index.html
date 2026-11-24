@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SolucionesBT - Panel de Turnos</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; text-align: center; }
+        .form-group { margin-bottom: 15px; display: flex; gap: 10px; }
+        input[type="text"], input[type="number"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        button { padding: 10px 20px; background-color: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #2980b9; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #2c3e50; color: white; }
+        .prioritario { color: #e74c3c; font-weight: bold; }
+        #mensaje { margin-top: 15px; padding: 10px; border-radius: 5px; display: none; }
+        .exito { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛠️ Panel de Turnos - SolucionesBT</h1>
+        
+        <!-- Formulario para crear turnos -->
+        <div style="background: #ecf0f1; padding: 20px; border-radius: 8px;">
+            <h3>Registrar Nuevo Turno</h3>
+            <div class="form-group">
+                <input type="text" id="nombre" placeholder="Nombre del Cliente" required>
+                <input type="text" id="equipo" placeholder="Tipo de Equipo (Ej. Portátil)" required>
+            </div>
+            <div class="form-group">
+                <input type="text" id="falla" placeholder="Falla Reportada" required>
+                <input type="number" id="precio" placeholder="Precio Base ($)" required>
+            </div>
+            <div class="form-group" style="align-items: center;">
+                <label><input type="checkbox" id="prioritario"> ¿Es atención prioritaria? (Aplica recargo)</label>
+            </div>
+            <button onclick="crearTurno()">Guardar Turno</button>
+            <div id="mensaje"></div>
+        </div>
+
+        <!-- Tabla donde se muestran los turnos -->
+        <h3 style="margin-top: 30px;">Lista de Turnos</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Cliente</th>
+                    <th>Equipo</th>
+                    <th>Falla</th>
+                    <th>Precio Base</th>
+                    <th>Prioritario</th>
+                    <th>Total a Pagar</th>
+                </tr>
+            </thead>
+            <tbody id="tablaTurnos">
+                <!-- Aquí se cargan los datos -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Función para cargar los turnos (GET)
+        async function cargarTurnos() {
+            const respuesta = await fetch('/api/turnos');
+            const turnos = await respuesta.json();
+            
+            const tabla = document.getElementById('tablaTurnos');
+            tabla.innerHTML = '';
+
+            if (turnos.length === 0) {
+                tabla.innerHTML = '<tr><td colspan="7" style="text-align:center;">No hay turnos registrados.</td></tr>';
+                return;
+            }
+
+            turnos.forEach(turno => {
+                const fila = document.createElement('tr');
+                fila.innerHTML = `
+                    <td>${turno.id}</td>
+                    <td>${turno.nombreCliente}</td>
+                    <td>${turno.tipoEquipo}</td>
+                    <td>${turno.fallaReportada}</td>
+                    <td>$${turno.precioBase}</td>
+                    <td class="${turno.prioritario ? 'prioritario' : ''}">${turno.prioritario ? 'SÍ' : 'NO'}</td>
+                    <td><strong>$${turno.totalPagar}</strong></td>
+                `;
+                tabla.appendChild(fila);
+            });
+        }
+
+        // Función para crear un turno (POST)
+        async function crearTurno() {
+            const nombre = document.getElementById('nombre').value;
+            const equipo = document.getElementById('equipo').value;
+            const falla = document.getElementById('falla').value;
+            const precio = document.getElementById('precio').value;
+            const prioritario = document.getElementById('prioritario').checked;
+
+            const mensajeDiv = document.getElementById('mensaje');
+
+            // Validación rápida en el frontend
+            if (!nombre || !equipo || !falla || !precio) {
+                mensajeDiv.className = 'error';
+                mensajeDiv.innerText = 'Por favor, complete todos los campos.';
+                mensajeDiv.style.display = 'block';
+                return;
+            }
+
+            const datos = {
+                nombreCliente: nombre,
+                tipoEquipo: equipo,
+                fallaReportada: falla,
+                precioBase: parseFloat(precio),
+                prioritario: prioritario
+            };
+
+            try {
+                const respuesta = await fetch('/api/turnos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(datos)
+                });
+
+                const resultado = await respuesta.json();
+
+                if (respuesta.status === 201) {
+                    mensajeDiv.className = 'exito';
+                    mensajeDiv.innerText = `¡Turno creado exitosamente! Total a pagar: $${resultado.totalPagar}`;
+                    mensajeDiv.style.display = 'block';
+                    
+                    // Limpiar formulario
+                    document.getElementById('nombre').value = '';
+                    document.getElementById('equipo').value = '';
+                    document.getElementById('falla').value = '';
+                    document.getElementById('precio').value = '';
+                    document.getElementById('prioritario').checked = false;
+
+                    // Recargar la tabla
+                    cargarTurnos();
+                } else {
+                    mensajeDiv.className = 'error';
+                    mensajeDiv.innerText = resultado.error;
+                    mensajeDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        // Cargar turnos al iniciar la página
+        cargarTurnos();
+    </script>
+</body>
+</html>
